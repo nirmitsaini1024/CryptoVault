@@ -1,8 +1,15 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 export function Hero() {
+  const router = useRouter();
+
+  const handleGetStarted = () => {
+    router.push("/wallet");
+  };
+
   return (
     <section className="relative pt-32 pb-20 bg-background">
       <div className="container px-4 mx-auto text-center">
@@ -10,10 +17,10 @@ export function Hero() {
           Your Gateway to Solana & Ethereum Wallets
         </h1>
         <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-          Create, manage, and secure your crypto wallets with a single mnemonic phrase. 
+          Create, manage, and secure your crypto wallets with a single mnemonic phrase.
           Built for both Solana and Ethereum blockchains.
         </p>
-        <Button size="lg" className="text-lg px-8">
+        <Button size="lg" className="text-lg px-8" onClick={handleGetStarted}>
           Get Started
         </Button>
       </div>
