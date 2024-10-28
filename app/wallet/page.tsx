@@ -2,197 +2,249 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
+import nacl from "tweetnacl";
+import { derivePath } from "ed25519-hd-key";
+import { Keypair } from "@solana/web3.js";
+import { generateMnemonic, mnemonicToSeed } from "bip39";
+import { HDNodeWallet } from "ethers";
+import { Wallet as EthersWallet } from "ethers";
+
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { generateMnemonic, 
-  // mnemonicToSeedSync,
-  //  validateMnemonic 
-  } from "bip39";
-// import {
-//   AlertDialog,
-//   AlertDialogAction,
-//   AlertDialogCancel,
-//   AlertDialogContent,
-//   AlertDialogDescription,
-//   AlertDialogFooter,
-//   AlertDialogHeader,
-//   AlertDialogTitle,
-//   AlertDialogTrigger,
-// } from "@/components/ui/alert-dialog";
-import { Coins, Wallet } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   ChevronDown,
   ChevronUp,
-  // Copy,
-  // Eye,
-  // EyeOff,
-  // Grid2X2,
-  // List,
-  // Trash,
+  Copy,
+  Eye,
+  EyeOff,
+  Shield,
+  Wallet as WalletIcon,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
-export default function WalletGenerator() {
-  const [selectedChain, setSelectedChain] = useState<
-    "solana" | "ethereum" | null
-  >(null);
-  const [mnemonicInput, setMnemonicInput] = useState("");
+export default function Wallet() {
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [mnemonicWords, setMnemonicWords] = useState<string[]>([]);
-  const [wallets, setWallets] = useState<any[]>([]);
+  const [mnemonic, setMnemonic] = useState<string | null>(null);
   const [showMnemonic, setShowMnemonic] = useState(false);
-  // const [gridView, setGridView] = useState<boolean>(false);
-
-  const blockchains = [
-    {
-      id: "solana",
-      name: "Solana",
-      icon: Coins,
-      description: "Fast, secure, and scalable blockchain platform",
-    },
-    {
-      id: "ethereum",
-      name: "Ethereum",
-      icon: Wallet,
-      description: "Decentralized platform for smart contracts",
-    },
-  ];
+  const [showPrivateKeys, setShowPrivateKeys] = useState<{ [key: number]: boolean }>({});
+  const [wallets, setWallets] = useState<
+    { publicKey: string; privateKey: string; type: string }[]
+  >([]);
 
   const handleGenerateWallet = () => {
-    const mnemonic = generateMnemonic(128);
-    const wordsArray = mnemonic.split(" ");
-    setMnemonicWords(wordsArray);
+    const generatedMnemonic = generateMnemonic(128);
+    setMnemonic(generatedMnemonic);
+    setMnemonicWords(generatedMnemonic.split(" "));
+    toast.success("New wallet generated successfully!");
+  };
+
+  const generateEthWallet = async () => {
+    if (!mnemonic) return;
+  
+    const seed = await mnemonicToSeed(mnemonic);
+    const derivationPath = `m/44'/60'/${currentIndex}'/0/0`;
+  
+    const hdNode = HDNodeWallet.fromSeed(seed).derivePath(derivationPath);
+    
+    const ethWallet = new EthersWallet(hdNode.privateKey); 
+  
+    const newWallet = {
+      publicKey: ethWallet.address,
+      privateKey: hdNode.privateKey,
+      type: "Ethereum",
+    };
+  
+    setWallets((prevWallets) => [...prevWallets, newWallet]);
+    setCurrentIndex(currentIndex + 1);
+    toast.success("Ethereum wallet added successfully!");
+  };
+  
+  
+
+  const generateSolanaWallet = () => {
+    if (!mnemonic) return;
+
+    const seed = mnemonicToSeed(mnemonic);
+    const path = `m/44'/501'/${currentIndex}'/0'`;
+    const derivedSeed = derivePath(path, seed.toString()).key;
+    const secret = nacl.sign.keyPair.fromSeed(derivedSeed).secretKey;
+    const keypair = Keypair.fromSecretKey(secret);
+
+    const newWallet = {
+      publicKey: keypair.publicKey.toBase58(),
+      privateKey: Buffer.from(keypair.secretKey).toString("base64"),
+      type: "Solana",
+    };
+
+    setWallets((prevWallets) => [...prevWallets, newWallet]);
+    setCurrentIndex(currentIndex + 1);
+    toast.success("Solana wallet added successfully!");
+  };
+
+  const copyToClipboard = (content: string) => {
+    navigator.clipboard.writeText(content);
+    toast.success("Copied to clipboard!");
+  };
+
+  const togglePrivateKey = (index: number) => {
+    setShowPrivateKeys((prev) => ({
+      ...prev,
+      [index]: !prev[index],
+    }));
   };
 
   return (
-    <div className="max-w-7xl mx-auto flex flex-col gap-4 p-4 min-h-[92vh]">
-      {wallets.length === 0 && (
-        <motion.div
-          className="flex flex-col gap-4"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: "easeInOut" }}
-        >
-          {!selectedChain && (
-            <section className="py-20 bg-background" id="blockchain-selector">
-              <div className="container px-4 mx-auto">
-                <h2 className="text-3xl font-bold text-center mb-12">
-                  Choose Your Blockchain
-                </h2>
-                <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-                  {blockchains.map((chain) => (
-                    <Card
-                      key={chain.id}
-                      className={`cursor-pointer transition-all hover:scale-105 ${
-                        selectedChain === chain.id ? "border-primary" : ""
-                      }`}
-                      onClick={() =>
-                        setSelectedChain(chain.id as "solana" | "ethereum")
-                      }
-                    >
-                      <CardContent className="flex flex-col items-center p-6">
-                        <chain.icon className="w-16 h-16 mb-4 text-primary" />
-                        <h3 className="text-2xl font-semibold mb-2">
-                          {chain.name}
-                        </h3>
-                        <p className="text-muted-foreground text-center">
-                          {chain.description}
-                        </p>
-                        <Button
-                          className="mt-6"
-                          variant={
-                            selectedChain === chain.id ? "default" : "outline"
-                          }
-                        >
-                          Select {chain.name}
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ))}
+    <div className="container mt-20 mx-auto py-8 px-4 space-y-8 max-w-5xl">
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-6"
+      >
+        <div className="space-y-2">
+          <h1 className="text-4xl font-bold tracking-tight flex items-center gap-2">
+            <Shield className="h-8 w-8 text-primary" />
+            Crypto Wallet Generator
+          </h1>
+          <p className="text-muted-foreground text-lg">
+            Generate and manage your cryptocurrency wallets securely.
+          </p>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Secret Recovery Phrase</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex gap-4">
+              <Input
+                type="password"
+                placeholder="Enter your secret phrase (or leave blank to generate)"
+                className="flex-1"
+              />
+              <Button onClick={handleGenerateWallet} className="whitespace-nowrap">
+                <WalletIcon className="mr-2 h-4 w-4" />
+                Generate Wallet
+              </Button>
+            </div>
+
+            {mnemonicWords.length > 0 && (
+              <Collapsible
+                open={showMnemonic}
+                onOpenChange={setShowMnemonic}
+                className="border rounded-lg p-4 space-y-4"
+              >
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Your Secret Phrase</h3>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                      {showMnemonic ? (
+                        <ChevronUp className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </CollapsibleTrigger>
                 </div>
-              </div>
-            </section>
-          )}
 
-          {selectedChain && (
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, ease: "easeInOut" }}
-              className="flex flex-col gap-4 my-12 mt-32"
-            >
-              <div className="flex  flex-col gap-2">
-                <h1 className="tracking-tighter text-4xl md:text-5xl font-black">
-                  Secret Recovery Phrase
-                </h1>
-                <p className="text-primary/80 font-semibold text-lg md:text-xl">
-                  Save these words in a safe place.
-                </p>
-              </div>
-              <div className="flex flex-col md:flex-row gap-4">
-                <input
-                  type="password"
-                  placeholder="Enter your secret phrase (or leave blank to generate)"
-                  onChange={(e) => setMnemonicInput(e.target.value)}
-                  value={mnemonicInput}
-                  className="input-class w-full max-w-xl"
-                />
+                <CollapsibleContent className="space-y-4">
+                  <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+                    {mnemonicWords.map((word, index) => (
+                      <div
+                        key={index}
+                        className="bg-secondary p-2 rounded-md text-center"
+                      >
+                        <span className="text-muted-foreground text-sm">{index + 1}.</span>{" "}
+                        {word}
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    variant="secondary"
+                    className="w-full"
+                    onClick={() => copyToClipboard(mnemonic || "")}
+                  >
+                    <Copy className="mr-2 h-4 w-4" />
+                    Copy Secret Phrase
+                  </Button>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+          </CardContent>
+        </Card>
 
-                <Button size={"lg"} onClick={handleGenerateWallet}>
-                  {mnemonicInput ? "Add Wallet" : "Generate Wallet"}
-                </Button>
-              </div>
-            </motion.div>
-          )}
-        </motion.div>
-      )}
-
-      {mnemonicWords.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{
-            duration: 0.3,
-            ease: "easeInOut",
-          }}
-          className="flex flex-col items-center gap-4"
-        >
-          <div className="flex w-full justify-between items-center">
-            <h2 className="text-2xl md:text-3xl font-bold tracking-tighter">
-              Your Secret Phrase
-            </h2>
-            <Button
-              onClick={() => setShowMnemonic(!showMnemonic)}
-              variant="ghost"
-            >
-              {showMnemonic ? (
-                <ChevronUp className="size-4" />
-              ) : (
-                <ChevronDown className="size-4" />
-              )}
+        {mnemonic && (
+          <div className="flex gap-4">
+            <Button onClick={generateSolanaWallet} className="flex-1">
+              Add Solana Wallet
+            </Button>
+            <Button onClick={generateEthWallet} className="flex-1">
+              Add Ethereum Wallet
             </Button>
           </div>
+        )}
 
-          {showMnemonic && (
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                duration: 0.3,
-                ease: "easeInOut",
-              }}
-              className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 justify-center w-full items-center mx-auto my-8"
-            >
-              {mnemonicWords.map((word, index) => (
-                <p
-                  key={index}
-                  className="md:text-lg bg-foreground/5 hover:bg-foreground/10 transition-all duration-300 rounded-lg p-4"
-                >
-                  {word}
-                </p>
-              ))}
-            </motion.div>
-          )}
-        </motion.div>
-      )}
-    </div>
-  );
-}
+        <div className="space-y-4">
+          {wallets.map((wallet, index) => (
+            <Card key={index}>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-xl flex items-center gap-2">
+                    {wallet.type} Wallet {index + 1}
+                    <Badge variant="secondary">{wallet.type}</Badge>
+                  </CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Public Key</label>
+                  <div
+                    onClick={() => copyToClipboard(wallet.publicKey)}
+                    className="flex items-center justify-between p-2 bg-secondary rounded-md cursor-pointer hover:bg-secondary/80 transition-colors"
+                  >
+                    <code className="text-sm truncate">{wallet.publicKey}</code>
+                    <Copy className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium">Private Key</label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => togglePrivateKey(index)}
+                    >
+                      {showPrivateKeys[index] ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <div
+                    onClick={() => copyToClipboard(wallet.privateKey)}
+                    className="flex items-center justify-between p-2 bg-secondary rounded-md cursor-pointer hover:bg-secondary/80 transition-colors"
+                  >
+                    <code className="text-sm truncate">
+                      {showPrivateKeys[index]
+                        ? wallet.privateKey
+                        : "••••••••••••••••••••••••••••••••"}
+                    </code>
+                    <Copy className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </motion.div>
+      </div>
+  )}
